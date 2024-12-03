@@ -130,8 +130,8 @@ jobs:
         make defconfig >/dev/null 2>&1
         SOURCE_REPO=$(echo $REPO_URL | awk -F '/' '{print $(NF)}')
         echo "SOURCE_REPO=$SOURCE_REPO" >>$GITHUB_ENV
-        TARGET_NAME=$(cat .config | grep CONFIG_TARGET_BOARD | awk -F '"' '{print $2}')
-        SUBTARGET_NAME=$(cat .config | grep CONFIG_TARGET_SUBTARGET | awk -F '"' '{print $2}')
+        TARGET_NAME=$(awk -F '"' '/CONFIG_TARGET_BOARD/{print $2}' .config)
+        SUBTARGET_NAME=$(awk -F '"' '/CONFIG_TARGET_SUBTARGET/{print $2}' .config)
         DEVICE_TARGET=$TARGET_NAME-$SUBTARGET_NAME
         echo "DEVICE_TARGET=$DEVICE_TARGET" >>$GITHUB_ENV
         KERNEL=$(grep -oP 'KERNEL_PATCHVER:=\K[^ ]+' target/linux/$TARGET_NAME/Makefile)
@@ -143,10 +143,9 @@ jobs:
       run: |
         FIRMWARE_PATH=openwrt/bin/targets/armvirt/64
         [ -d $FIRMWARE_PATH ] || mkdir -p $FIRMWARE_PATH
+        echo -e $(curl -sL api.github.com/repos/$GITHUB_REPOSITORY/releases | grep $DEVICE_TARGET.*$SOURCE_REPO.*$REPO_BRANCH | awk -F '"' '{print $4}') >release.txt
         cd $FIRMWARE_PATH
         wget -q $(curl -sL api.github.com/repos/$GITHUB_REPOSITORY/releases | grep $RELEASE_TAG/ | awk -F '"' '{print $4}' | grep -v img.gz)
-        DEFAULT_IP=$(curl -sL api.github.com/repos/$GITHUB_REPOSITORY/releases | grep $DEVICE_TARGET.*$SOURCE_REPO.*$REPO_BRANCH | grep -oP '默认地址: \K\d+\.\d+\.\d+\.\d+')
-        echo "DEFAULT_IP=$DEFAULT_IP" >>$GITHUB_ENV
         echo "FIRMWARE_PATH=$PWD" >>$GITHUB_ENV
         echo "DATE=$(date +"%Y-%m-%d %H:%M:%S")" >>$GITHUB_ENV
 
@@ -200,18 +199,4 @@ jobs:
         tag: ${{ env.RELEASE_TAG }}
         token: ${{ secrets.GITHUB_TOKEN }}
         artifacts: ${{ env.FIRMWARE_PATH }}/*,${{ env.PACKAGED_OUTPUTPATH }}/*
-        body: |
-          **This is ${{ env.SOURCE_REPO }} firmware for ${{ env.DEVICE_TARGET }}**
-          ### 📒 固件信息
-          - 💻 平台架构: ${{ env.DEVICE_TARGET }}
-          - ⚽ 固件源码: ${{ env.REPO_URL }}
-          - 💝 源码分支: ${{ env.REPO_BRANCH }}
-          - 🚀 内核版本: ${{ env.KERNEL_VERSION }}
-          - 🌐 默认地址: ${{ env.DEFAULT_IP }}
-          - 🔑 默认密码: password
-          ### 🧊 固件版本
-          - 固件编译前最后一次➦[主源码](${{ env.REPO_URL }})更新记录
-          - ${{ env.COMMIT_AUTHOR }}
-          - ${{ env.COMMIT_DATE }}
-          - ${{ env.COMMIT_MESSAGE }}
-          - ${{ env.COMMIT_HASH }}
+        bodyFile: release.txt
